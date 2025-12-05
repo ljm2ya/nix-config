@@ -18,12 +18,11 @@ Centralized NixOS and Home Manager configuration with modular profile selection.
 
 ```
 ~/nix/
-├── modules/home-manager/cli.nix    # Complete CLI configuration
-├── modules/system/configuration.nix # System configuration
+├── home-manager/cli.nix    # Complete CLI configuration
+├── system/configuration.nix # System configuration
 ├── profiles/{cli-only,full-system}.nix # Profile selectors
 ├── dotfiles/                       # Centralized dotfiles
 ├── scripts/                        # Profile switching helpers
-└── docs/                          # Documentation
 ```
 
 ## What's Included
@@ -50,7 +49,7 @@ Centralized NixOS and Home Manager configuration with modular profile selection.
 
 ### Add/Remove CLI Tools
 ```bash
-vim ~/nix/modules/home-manager/cli.nix
+vim ~/nix/home-manager/cli.nix
 home-manager switch
 ```
 

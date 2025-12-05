@@ -3,7 +3,7 @@
 {
   # Full system profile - CLI + potential GUI additions
   imports = [
-    ../modules/home-manager/cli.nix
+    ../home-manager/cli.nix
   ];
 
   # Additional packages for full system (if needed)

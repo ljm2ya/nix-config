@@ -48,6 +48,7 @@
       nix-search-cli
       poppler
       ttyd
+      tree
       rclone
       ripgrep
       rlwrap

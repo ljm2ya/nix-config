@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 echo "Switching to full system configuration..."
 
@@ -7,7 +7,7 @@ ln -sf ~/nix/profiles/full-system.nix ~/.config/home-manager/home.nix
 
 # Create symlink for system configuration (requires sudo)
 echo "Linking system configuration (requires sudo)..."
-sudo ln -sf ~/nix/modules/system/configuration.nix /etc/nixos/configuration.nix
+sudo ln -sf ~/nix/system/configuration.nix /etc/nixos/configuration.nix
 
 echo "Applying system configuration..."
 sudo nixos-rebuild switch

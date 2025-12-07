@@ -25,3 +25,7 @@ temp/
 # OS generated files
 Thumbs.db
 .directory
+
+# System-specific hardware configuration
+# This file is generated on each machine and should not be in git
+/modules/nixos/hardware-configuration.nix

@@ -1,6 +1,7 @@
 { config, lib, pkgs, ... }:
 
 {
+  nixpkgs.config.allowUnfree = true;
   # GUI applications and user-level desktop configurations
   # This module extends the CLI configuration with GUI applications
   # Intended to be imported alongside cli.nix for GUI environments

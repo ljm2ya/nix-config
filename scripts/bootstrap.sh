@@ -179,17 +179,24 @@ if [[ "$SYSTEM_CONFIG" = true ]]; then
 
     # Check for hardware-configuration.nix
     if [[ ! -f "$NIX_DIR/system/hardware-configuration.nix" ]]; then
-        print_warning "hardware-configuration.nix not found"
-        print_info "Generating hardware configuration..."
-
-        if ! sudo nixos-generate-config --show-hardware-config > "$NIX_DIR/system/hardware-configuration.nix"; then
-            print_error "Failed to generate hardware configuration"
-            exit 1
+        print_warning "hardware-configuration.nix not found in the project."
+        if [[ -f "/etc/nixos/hardware-configuration.nix" ]]; then
+            print_info "Found existing hardware-configuration.nix in /etc/nixos. Copying it to the project."
+            if ! cp "/etc/nixos/hardware-configuration.nix" "$NIX_DIR/system/hardware-configuration.nix"; then
+                print_error "Failed to copy hardware-configuration.nix"
+                exit 1
+            fi
+            print_success "Copied hardware-configuration.nix to system/"
+        else
+            print_info "Generating hardware configuration..."
+            if ! sudo nixos-generate-config --show-hardware-config > "$NIX_DIR/system/hardware-configuration.nix"; then
+                print_error "Failed to generate hardware configuration"
+                exit 1
+            fi
+            print_success "Generated hardware-configuration.nix"
+            print_warning "Review $NIX_DIR/system/hardware-configuration.nix"
+            print_warning "You may need to customize boot/swap settings"
         fi
-
-        print_success "Generated hardware-configuration.nix"
-        print_warning "Review $NIX_DIR/system/hardware-configuration.nix"
-        print_warning "You may need to customize boot/swap settings"
     else
         print_success "hardware-configuration.nix exists"
     fi

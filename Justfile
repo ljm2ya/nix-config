@@ -60,9 +60,9 @@ switch profile="":
             exit 1; \
         fi; \
         echo "🔄 Switching to last used profile: $last_profile..."; \
-        @just switch-$last_profile; \
+        just switch-$last_profile; \
     else \
-        @just switch-{{profile}}; \
+        just switch-{{profile}}; \
     fi
 
 # ═══════════════════════════════════════════════════════════════
@@ -383,11 +383,47 @@ _bootstrap-system machine_type:
             cp /etc/nixos/hardware-configuration.nix {{nix_dir}}/modules/nixos/hardware-configuration.nix; \
             echo "✅ Copied existing hardware-configuration.nix"; \
         else \
-            sudo nixos-generate-config --show-hardware-config > {{nix_dir}}/modules/nixos/hardware-configuration.nix; \
-            echo "✅ Generated hardware-configuration.nix"; \
+            if ! sudo nixos-generate-config --show-hardware-config > {{nix_dir}}/modules/nixos/hardware-configuration.nix; then \
+                echo "⚠️  nixos-generate-config failed. Generating a fallback hardware-configuration.nix for a single-partition system."; \
+                ROOT_UUID=$(findmnt -n -o UUID /); \
+                ROOT_FSTYPE=$(findmnt -n -o FSTYPE /); \
+                ROOT_PART=$(findmnt -n -o SOURCE /); \
+                BOOT_DISK_NAME=$(lsblk -no PKNAME "$ROOT_PART"); \
+                BOOT_DEVICE="/dev/$BOOT_DISK_NAME"; \
+                echo "ℹ️  Detected Root UUID: $ROOT_UUID"; \
+                echo "ℹ️  Detected Root FS Type: $ROOT_FSTYPE"; \
+                echo "ℹ️  Detected Boot Device: $BOOT_DEVICE"; \
+                cat > {{nix_dir}}/modules/nixos/hardware-configuration.nix <<EOF
+{ config, lib, pkgs, modulesPath, ... }:
+{
+  imports = [ (modulesPath + "/installer/scan/not-detected.nix") ];
+  boot.initrd.availableKernelModules = [ "xhci_pci" "ahci" "usb_storage" "sd_mod" ];
+  boot.initrd.kernelModules = [ ];
+  boot.kernelModules = [ "kvm-intel" ];
+  boot.extraModulePackages = [ ];
+  fileSystems."/" = {
+    device = "/dev/disk/by-uuid/$ROOT_UUID";
+    fsType = "$ROOT_FSTYPE";
+  };
+  boot.loader.grub.enable = true;
+  boot.loader.grub.device = "$BOOT_DEVICE";
+  swapDevices = [ ];
+  networking.useDHCP = lib.mkDefault true;
+  nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
+  powerManagement.cpuFreqGovernor = lib.mkDefault "powersave";
+  hardware.cpu.intel.updateMicrocode = lib.mkDefault config.hardware.enableRedistributableFirmware;
+}
+EOF
+                echo "✅ Generated fallback hardware-configuration.nix."; \
+                echo "⚠️  Please review the generated file and adjust if necessary."; \
+            else \
+                 echo "✅ Generated hardware-configuration.nix"; \
+            fi; \
         fi; \
     fi
-    @if [ -f "{{nix_dir}}/modules/nixos/base.nix" ]; then \
+    @if [ -f "{{nix_dir}}/modules/nixos/base.nI have updated the `_bootstrap-system` recipe in your `Justfile`. If `nixos-generate-config` fails, it will now attempt to create a fallback `hardware-configuration.nix` for systems with a single root partition.
+
+You can now run `just init` again. It will either succeed with the standard method or use the new fallback.x" ]; then \
         sed -i "s/machineType = \".*\";/machineType = \"{{machine_type}}\";/" {{nix_dir}}/modules/nixos/base.nix; \
         echo "✅ Updated base.nix with machine type"; \
     fi

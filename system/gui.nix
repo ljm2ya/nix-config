@@ -1,4 +1,4 @@
-{ config, lib, pkgs, inputs, ... }:
+{ config, lib, pkgs, ... }:
 
 {
   # System-level GUI configuration
@@ -141,8 +141,5 @@
         fi
       done
     '')
-
-    # Antigravity input (assuming this is GUI-related)
-    inputs.antigravity-nix.packages.${pkgs.system}.default
   ];
 }

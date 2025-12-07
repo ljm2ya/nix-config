@@ -2,7 +2,7 @@
 # This is the complete configuration including base system + GUI
 # Maps to /etc/nixos/configuration.nix
 
-{ config, pkgs, lib, inputs, ... }:
+{ config, pkgs, lib, ... }:
 
 {
   imports = [

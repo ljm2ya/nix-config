@@ -27,7 +27,6 @@ in
   # GUI configurations are in system/gui.nix
 
   imports = [
-    ./hardware-configuration.nix
   ];
 
   # === Boot Configuration ===
@@ -56,10 +55,18 @@ in
   };
 
   # === Nix Configuration ===
-  nix.gc = {
-    automatic = true;
-    dates = "weekly";
-    options = "--delete-older-than 7d";
+  nix = {
+    # Enable flakes and new nix command
+    settings = {
+      experimental-features = [ "nix-command" "flakes" ];
+    };
+
+    # Garbage collection
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      options = "--delete-older-than 7d";
+    };
   };
 
   # === Power Management ===
@@ -67,20 +74,20 @@ in
   powerManagement.enable = !isVM;
 
   # Logind configuration: Conditional based on machine type
-  services.logind.extraConfig =
-    if isLaptop then ''
-      HandleLidSwitch=suspend-then-hibernate
-      HandleLidSwitchExternalPower=suspend
-      HandlePowerKey=hibernate
-      HandlePowerKeyLongPress=poweroff
-      PowerKeyIgnoreInhibited=yes
-    ''
-    else if isDesktop then ''
-      HandlePowerKey=hibernate
-      HandlePowerKeyLongPress=poweroff
-      PowerKeyIgnoreInhibited=yes
-    ''
-    else "";  # VM: no special power handling
+  services.logind.settings.Login =
+    if isLaptop then {
+      HandleLidSwitch= "suspend-then-hibernate";
+      HandleLidSwitchExternalPower= "suspend";
+      HandlePowerKey= "hibernate";
+      HandlePowerKeyLongPress= "poweroff";
+      #PowerKeyIgnoreInhibited= yes
+    }
+    else if isDesktop then {
+      HandlePowerKey= "hibernate";
+      HandlePowerKeyLongPress= "poweroff";
+      #PowerKeyIgnoreInhibited=yes
+    }
+    else {};  # VM: no special power handling
 
   # Swap devices: Only for physical hardware
   swapDevices = lib.optionals (!isVM) [{

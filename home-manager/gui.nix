@@ -8,6 +8,7 @@
   home.packages = with pkgs; [
     # GUI Applications
     alacritty           # Terminal emulator
+    google-antigravity  # Agentic IDE (provided by flake overlay)
     discord             # Communication
     emacs               # Editor
     feh                 # Image viewer

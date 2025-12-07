@@ -5,8 +5,8 @@ echo "Switching to CLI-only configuration..."
 # Link CLI-only profile
 ln -sf ~/nix/profiles/cli-only.nix ~/.config/home-manager/home.nix
 
-echo "Applying home-manager configuration..."
-home-manager switch
+echo "Applying home-manager configuration (flake-based)..."
+home-manager switch --flake ~/nix#zeno
 
 echo "✅ CLI-only configuration active!"
 echo ""

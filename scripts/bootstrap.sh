@@ -249,20 +249,40 @@ if [[ "$SYSTEM_CONFIG" = true ]]; then
         print_info "  Resume UUID: ${RESUME_UUID:0:8}..."
     fi
 
-    # Link system configuration
+    # Link system configuration (traditional and flake)
     print_info "Linking system configuration..."
+
+    # Link traditional configuration.nix for compatibility
     if sudo ln -sf "$NIX_DIR/system/configuration.nix" /etc/nixos/configuration.nix; then
-        print_success "System configuration linked"
+        print_success "Traditional configuration linked"
     else
         print_error "Failed to link system configuration"
         exit 1
     fi
 
-    # Rebuild system
-    print_info "Building NixOS system configuration..."
+    # Link flake.nix for flake-based workflow
+    if sudo ln -sf "$NIX_DIR/flake.nix" /etc/nixos/flake.nix; then
+        print_success "Flake configuration linked"
+    else
+        print_warning "Failed to link flake.nix (continuing anyway)"
+    fi
+
+    # Initialize flake if flake.lock doesn't exist
+    if [[ ! -f "$NIX_DIR/flake.lock" ]]; then
+        print_info "Initializing flake (generating flake.lock)..."
+        cd "$NIX_DIR"
+        if nix flake update; then
+            print_success "Flake initialized"
+        else
+            print_warning "Flake initialization failed (continuing with traditional build)"
+        fi
+    fi
+
+    # Rebuild system using flake
+    print_info "Building NixOS system configuration (flake-based)..."
     print_warning "This may take several minutes..."
 
-    if sudo nixos-rebuild switch; then
+    if sudo nixos-rebuild switch --flake "$NIX_DIR#nixos"; then
         print_success "System configuration applied"
     else
         print_error "System rebuild failed"
@@ -301,11 +321,18 @@ else
     exit 1
 fi
 
-# Apply home-manager configuration
-print_info "Applying home-manager configuration..."
+# Apply home-manager configuration (flake-based)
+print_info "Applying home-manager configuration (flake-based)..."
 print_warning "This may take several minutes on first run..."
 
-if home-manager switch; then
+# Ensure flake.lock exists before home-manager switch
+if [[ ! -f "$NIX_DIR/flake.lock" ]]; then
+    print_info "Initializing flake for home-manager..."
+    cd "$NIX_DIR"
+    nix flake update
+fi
+
+if home-manager switch --flake "$NIX_DIR#zeno"; then
     print_success "Home-manager configuration applied"
 else
     print_error "Home-manager switch failed"

@@ -19,6 +19,7 @@
     nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
+        ./system/hardware-configuration.nix
         ./system/configuration.nix
 
         # Make antigravity available as an overlay

@@ -5,8 +5,8 @@ echo "Switching to GUI profile..."
 # Link GUI profile for home-manager
 ln -sf ~/nix/profiles/gui.nix ~/.config/home-manager/home.nix
 
-echo "Applying home-manager configuration..."
-home-manager switch
+echo "Applying home-manager configuration (flake-based)..."
+home-manager switch --flake ~/nix#zeno
 
 echo "✅ GUI profile active!"
 echo ""

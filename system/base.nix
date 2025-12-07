@@ -1,7 +1,4 @@
-# NixOS System Configuration - Base
-# This is a modularized version of the original /etc/nixos/configuration.nix
-
-{ config, pkgs, lib, inputs, ... }:
+{ config, pkgs, lib, ... }:
 
 let
   # =================================================================
@@ -12,17 +9,20 @@ let
   enableNvidia = false;
 in
 {
+  # Base system configuration - hardware, drivers, kernel, system services
+  # This module contains ONLY system-level configurations
+  # GUI configurations are in system/gui.nix
+
   imports = [
-    /etc/nixos/hardware-configuration.nix
-    ./desktop.nix
+    ./hardware-configuration.nix
   ];
 
-  #=== Boot Configuration ===
+  # === Boot Configuration ===
   boot = {
     loader = {
-     systemd-boot.enable = true;
-     systemd-boot.sortKey = "z-nixos";
-     efi.canTouchEfiVariables = false;
+      systemd-boot.enable = true;
+      systemd-boot.sortKey = "z-nixos";
+      efi.canTouchEfiVariables = false;
     };
 
     # Kernel Parameters: Conditional based on GPU
@@ -37,23 +37,23 @@ in
     resumeDevice = "/dev/disk/by-uuid/5a4cf021-8203-453b-877f-164c5c6e1128";
   };
 
-  # auto cleanup old nixos builds
+  # === Nix Configuration ===
   nix.gc = {
-     automatic = true;
-     dates = "weekly";
-     options = "--delete-older-than 7d";
+    automatic = true;
+    dates = "weekly";
+    options = "--delete-older-than 7d";
   };
 
   # === Power Management ===
   powerManagement.enable = true;
 
-  services.logind.settings.Login = {
-    HandleLidSwitch = "suspend-then-hibernate";
-    HandleLidSwitchExternalPower = "suspend";
-    HandlePowerKey = "hibernate";
-    HandlePowerKeyLongPress = "poweroff";
-    PowerKeyIgnoreInhibited = "yes";
-  };
+  services.logind.extraConfig = ''
+    HandleLidSwitch=suspend-then-hibernate
+    HandleLidSwitchExternalPower=suspend
+    HandlePowerKey=hibernate
+    HandlePowerKeyLongPress=poweroff
+    PowerKeyIgnoreInhibited=yes
+  '';
 
   swapDevices = [{
     device = "/dev/disk/by-uuid/5a4cf021-8203-453b-877f-164c5c6e1128";
@@ -90,15 +90,6 @@ in
       LC_TELEPHONE = "en_US.UTF-8";
       LC_TIME = "en_US.UTF-8";
     };
-    inputMethod = {
-      enable = true;
-      type = "fcitx5";
-      fcitx5.addons = with pkgs; [
-        fcitx5-mozc
-        kdePackages.fcitx5-qt
-        fcitx5-hangul
-      ];
-    };
   };
 
   # === Audio ===
@@ -130,36 +121,77 @@ in
   };
   services.blueman.enable = true;
 
-  # === User Configuration ===
-  users.users.zeno = {
-    isNormalUser = true;
-    description = "zeno";
-    extraGroups = ["networkmanager" "wheel" "video" "render" ];
-    packages = with pkgs; [];
+  # === Graphics Configuration (Conditional) ===
+  hardware.graphics = {
+    enable = true;
+    # Load Intel specific media drivers ONLY if we are NOT using Nvidia mode
+    extraPackages = if enableNvidia then [] else with pkgs; [
+      intel-media-driver     # VA-API (iHD) userspace
+      vpl-gpu-rt             # oneVPL (QSV) runtime
+      intel-compute-runtime  # OpenCL
+    ];
   };
-  users.defaultUserShell = pkgs.zsh; # Keep zsh available, but configuration managed by home-manager
 
-  services.getty.autologinUser = "zeno";
+  environment.sessionVariables = {
+    # If Nvidia is disabled, force Intel iHD. If Nvidia is enabled, let it auto-detect or set to nvidia.
+    LIBVA_DRIVER_NAME = if enableNvidia then "nvidia" else "iHD";
+  };
 
-  # === Services ===
+  hardware.enableRedistributableFirmware = true;
+
+  # Select Video Drivers based on switch
+  services.xserver.videoDrivers = if enableNvidia
+    then [ "nvidia" ]
+    else [ "modesetting" ];
+
+  # === Nvidia Specific Config (Active only when enableNvidia = true) ===
+  hardware.nvidia = lib.mkIf enableNvidia {
+    modesetting.enable = true;
+    powerManagement.enable = true;
+    powerManagement.finegrained = true;
+    open = false;
+    nvidiaSettings = true;
+    package = config.boot.kernelPackages.nvidiaPackages.stable;
+
+    prime = {
+      offload = {
+        enable = true;
+        enableOffloadCmd = true;
+      };
+      intelBusId = "PCI:0:2:0";
+      nvidiaBusId = "PCI:1:0:0";
+    };
+  };
+
+  # === System Services ===
   services = {
-    gvfs.enable = true;      # Mount, trash, and other functionalities
-    tumbler.enable = true;   # Thumbnail support for images
     openssh.enable = true;
-    # Note: lorri migrated to home-manager per-user configuration
-    acpid.enable = true; # battery status deamon
+    acpid.enable = true; # battery status daemon
     mullvad-vpn = {
       enable = true;
       package = pkgs.mullvad-vpn;
     };
-    tailscale.enable = true; # Keep system-level for network service
+    tailscale.enable = true;
   };
 
-  # === Packages ===
+  # === User Configuration ===
+  users.users.zeno = {
+    isNormalUser = true;
+    description = "zeno";
+    extraGroups = ["networkmanager" "wheel" "video" "render"];
+    packages = with pkgs; [];
+  };
+  users.defaultUserShell = pkgs.zsh;
+  services.getty.autologinUser = "zeno";
+
+  # === System Programs ===
+  programs.zsh.enable = true; # Enable zsh system-wide
+
+  # === System Packages ===
   nixpkgs.config.allowUnfree = true;
 
-  # System utilities (keep at system level)
   environment.systemPackages = with pkgs; [
+    # System utilities
     home-manager
     ffmpeg
     pamixer

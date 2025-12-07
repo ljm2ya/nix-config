@@ -1,0 +1,14 @@
+keycode 102 = Super_L
+!start temp
+!keycode 133 = Alt_L
+!remove mod3 = Hyper_L
+!remove mod4 = Alt_L
+keycode 64 = Alt_L
+!remove mod1 = Hyper_L
+!add    mod4 = Hyper_L 
+!end temp
+remove mod1 = Hangul
+keycode 108 = Hangul
+clear Lock
+keycode 100 = Caps_Lock
+add Lock = Caps_Lock

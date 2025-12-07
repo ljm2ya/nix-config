@@ -41,6 +41,7 @@
       fd
       file
       fzf
+      gemini-cli
       git
       glow # CLI markdown viewer
       htop

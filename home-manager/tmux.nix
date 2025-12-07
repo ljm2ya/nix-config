@@ -25,6 +25,7 @@ in
       yank
       better-mouse-mode
       vim-tmux-navigator
+      resurrect
     ];
 
     extraConfig = ''

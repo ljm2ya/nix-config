@@ -61,9 +61,9 @@ while [[ $# -gt 0 ]]; do
             echo "  --help, -h                Show this help message"
             echo ""
             echo "Profiles:"
-            echo "  cli   - CLI tools only (home-manager)"
-            echo "  gui   - CLI + GUI apps (home-manager, no system changes)"
-            echo "  full  - Complete system (home-manager + NixOS rebuild)"
+            echo "  cli      - CLI tools only (home-manager)"
+            echo "  desktop  - CLI + Desktop apps (home-manager, no system changes)"
+            echo "  full     - Complete system (home-manager + NixOS rebuild)"
             exit 0
             ;;
         *)
@@ -74,10 +74,15 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate profile
-if [[ ! "$PROFILE" =~ ^(cli|gui|full)$ ]]; then
+# Validate profile (support both gui and desktop for backward compatibility)
+if [[ "$PROFILE" == "gui" ]]; then
+    PROFILE="desktop"
+    print_info "Note: 'gui' is now called 'desktop', auto-correcting..."
+fi
+
+if [[ ! "$PROFILE" =~ ^(cli|desktop|full)$ ]]; then
     print_error "Invalid profile: $PROFILE"
-    print_error "Valid profiles: cli, gui, full"
+    print_error "Valid profiles: cli, desktop, full"
     exit 1
 fi
 
@@ -178,23 +183,23 @@ if [[ "$SYSTEM_CONFIG" = true ]]; then
     print_info "Step 2: Setting up system configuration..."
 
     # Check for hardware-configuration.nix
-    if [[ ! -f "$NIX_DIR/system/hardware-configuration.nix" ]]; then
+    if [[ ! -f "$NIX_DIR/modules/nixos/hardware-configuration.nix" ]]; then
         print_warning "hardware-configuration.nix not found in the project."
         if [[ -f "/etc/nixos/hardware-configuration.nix" ]]; then
             print_info "Found existing hardware-configuration.nix in /etc/nixos. Copying it to the project."
-            if ! cp "/etc/nixos/hardware-configuration.nix" "$NIX_DIR/system/hardware-configuration.nix"; then
+            if ! cp "/etc/nixos/hardware-configuration.nix" "$NIX_DIR/modules/nixos/hardware-configuration.nix"; then
                 print_error "Failed to copy hardware-configuration.nix"
                 exit 1
             fi
-            print_success "Copied hardware-configuration.nix to system/"
+            print_success "Copied hardware-configuration.nix to modules/nixos/"
         else
             print_info "Generating hardware configuration..."
-            if ! sudo nixos-generate-config --show-hardware-config > "$NIX_DIR/system/hardware-configuration.nix"; then
+            if ! sudo nixos-generate-config --show-hardware-config > "$NIX_DIR/modules/nixos/hardware-configuration.nix"; then
                 print_error "Failed to generate hardware configuration"
                 exit 1
             fi
             print_success "Generated hardware-configuration.nix"
-            print_warning "Review $NIX_DIR/system/hardware-configuration.nix"
+            print_warning "Review $NIX_DIR/modules/nixos/hardware-configuration.nix"
             print_warning "You may need to customize boot/swap settings"
         fi
     else
@@ -238,15 +243,15 @@ if [[ "$SYSTEM_CONFIG" = true ]]; then
     print_info "Updating base.nix with machine type and UUIDs..."
 
     # Create a backup
-    cp "$NIX_DIR/system/base.nix" "$NIX_DIR/system/base.nix.backup"
+    cp "$NIX_DIR/modules/nixos/base.nix" "$NIX_DIR/modules/nixos/base.nix.backup"
 
     # Update machine type
-    sed -i "s/machineType = \".*\";/machineType = \"$MACHINE_TYPE\";/" "$NIX_DIR/system/base.nix"
+    sed -i "s/machineType = \".*\";/machineType = \"$MACHINE_TYPE\";/" "$NIX_DIR/modules/nixos/base.nix"
 
     # Update UUIDs (only if not VM)
     if [[ "$MACHINE_TYPE" != "vm" ]] && [[ -n "$SWAP_UUID" ]]; then
-        sed -i "s/swapUUID = \".*\";/swapUUID = \"$SWAP_UUID\";/" "$NIX_DIR/system/base.nix"
-        sed -i "s/resumeUUID = \".*\";/resumeUUID = \"$RESUME_UUID\";/" "$NIX_DIR/system/base.nix"
+        sed -i "s/swapUUID = \".*\";/swapUUID = \"$SWAP_UUID\";/" "$NIX_DIR/modules/nixos/base.nix"
+        sed -i "s/resumeUUID = \".*\";/resumeUUID = \"$RESUME_UUID\";/" "$NIX_DIR/modules/nixos/base.nix"
     fi
 
     print_success "base.nix updated"
@@ -260,7 +265,7 @@ if [[ "$SYSTEM_CONFIG" = true ]]; then
     print_info "Linking system configuration..."
 
     # Link traditional configuration.nix for compatibility
-    if sudo ln -sf "$NIX_DIR/system/configuration.nix" /etc/nixos/configuration.nix; then
+    if sudo ln -sf "$NIX_DIR/modules/nixos/configuration.nix" /etc/nixos/configuration.nix; then
         print_success "Traditional configuration linked"
     else
         print_error "Failed to link system configuration"
@@ -312,8 +317,8 @@ case $PROFILE in
     cli)
         PROFILE_FILE="$NIX_DIR/profiles/cli-only.nix"
         ;;
-    gui)
-        PROFILE_FILE="$NIX_DIR/profiles/gui.nix"
+    desktop)
+        PROFILE_FILE="$NIX_DIR/profiles/desktop.nix"
         ;;
     full)
         PROFILE_FILE="$NIX_DIR/profiles/full-system.nix"
@@ -358,12 +363,12 @@ else
     print_warning "Some CLI dotfiles may not be linked"
 fi
 
-# Check GUI dotfiles if GUI profile
-if [[ "$PROFILE" == "gui" ]] || [[ "$PROFILE" == "full" ]]; then
+# Check desktop dotfiles if desktop profile
+if [[ "$PROFILE" == "desktop" ]] || [[ "$PROFILE" == "full" ]]; then
     if [[ -L ~/.xinitrc ]] && [[ -L ~/.config/awesome ]]; then
-        print_success "GUI dotfiles linked correctly"
+        print_success "Desktop dotfiles linked correctly"
     else
-        print_warning "Some GUI dotfiles may not be linked"
+        print_warning "Some desktop dotfiles may not be linked"
     fi
 fi
 
@@ -380,18 +385,18 @@ echo ""
 
 print_info "Next steps:"
 echo "  1. Customize dotfiles in ~/nix/dotfiles/"
-echo "  2. Add packages to ~/nix/home-manager/{cli,gui}.nix"
+echo "  2. Add packages to ~/nix/modules/home/{cli,desktop}.nix"
 echo "  3. Commit your changes: cd ~/nix && git add . && git commit"
 echo ""
 
 if [[ "$PROFILE" == "cli" ]]; then
-    print_info "To enable GUI later, run:"
-    echo "  ~/nix/scripts/switch-gui.sh"
+    print_info "To enable desktop later, run:"
+    echo "  ~/nix/scripts/switch-desktop.sh"
     echo ""
 fi
 
 if [[ "$SYSTEM_CONFIG" = false ]] && [[ "$PROFILE" != "cli" ]]; then
-    print_warning "Note: GUI apps installed, but system GUI services not configured"
+    print_warning "Note: Desktop apps installed, but system desktop services not configured"
     print_info "To enable full system (X11, WM, etc.), run:"
     echo "  ~/nix/scripts/switch-full-system.sh"
     echo ""

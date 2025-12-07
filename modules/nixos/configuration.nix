@@ -6,8 +6,8 @@
 
 {
   imports = [
-    ./base.nix    # Hardware, drivers, kernel, system services
-    ./gui.nix     # X11, window managers, fonts, GUI system services
+    ./base.nix       # Hardware, drivers, kernel, system services
+    ./desktop.nix    # X11, window managers, fonts, desktop environment services
   ];
 
   # Additional full-system specific configurations can be added here

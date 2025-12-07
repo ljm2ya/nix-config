@@ -7,7 +7,7 @@ ln -sf ~/nix/profiles/full-system.nix ~/.config/home-manager/home.nix
 
 # Create symlinks for system configuration (requires sudo)
 echo "Linking system configuration (requires sudo)..."
-sudo ln -sf ~/nix/system/configuration.nix /etc/nixos/configuration.nix
+sudo ln -sf ~/nix/modules/nixos/configuration.nix /etc/nixos/configuration.nix
 sudo ln -sf ~/nix/flake.nix /etc/nixos/flake.nix
 
 echo "Applying system configuration (flake-based)..."
@@ -22,5 +22,5 @@ echo ""
 echo "This configuration includes:"
 echo "- All CLI tools and utilities"
 echo "- System-level programs and services"
-echo "- GUI applications and desktop environment"
+echo "- Desktop applications and environment"
 echo "- Hardware and system services"

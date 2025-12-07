@@ -2,9 +2,9 @@
 
 {
   nixpkgs.config.allowUnfree = true;
-  # GUI applications and user-level desktop configurations
-  # This module extends the CLI configuration with GUI applications
-  # Intended to be imported alongside cli.nix for GUI environments
+  # Desktop applications and user-level desktop environment configurations
+  # This module extends the CLI configuration with desktop applications
+  # Intended to be imported alongside cli.nix for desktop environments
 
   home.packages = with pkgs; [
     # GUI Applications
@@ -47,6 +47,9 @@
 
     # Rofi configuration
     ".config/rofi".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix/dotfiles/.config/rofi";
+
+    # Doom Emacs configuration
+    ".doom.d".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix/dotfiles/.doom.d";
   };
 
   # GUI-specific program configurations

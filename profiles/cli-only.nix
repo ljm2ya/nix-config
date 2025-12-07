@@ -3,6 +3,6 @@
 {
   # CLI-only profile - imports the complete CLI configuration
   imports = [
-    ../home-manager/cli.nix
+    ../modules/home/cli.nix
   ];
 }

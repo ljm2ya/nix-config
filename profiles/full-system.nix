@@ -1,10 +1,10 @@
 { config, lib, pkgs, ... }:
 
 {
-  # Full system profile - includes CLI + GUI configurations
-  # This profile is used with system/configuration.nix for complete system
+  # Full system profile - includes CLI + Desktop configurations
+  # This profile is used with modules/nixos/configuration.nix for complete system
   imports = [
-    ./gui.nix  # Imports both CLI and GUI configurations
+    ./desktop.nix  # Imports both CLI and desktop configurations
   ];
 
   # Additional full-system specific home-manager configurations

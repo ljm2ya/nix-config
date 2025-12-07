@@ -1,0 +1,579 @@
+#!/usr/bin/env bash
+set -e
+
+# ==============================================================================
+# Unified Nix Configuration Script
+# ==============================================================================
+# This script combines bootstrap and profile switching with idempotency.
+#
+# Features:
+# - Idempotent: Safe to run multiple times
+# - State tracking: Knows if system is already configured
+# - Profile switching: Change profiles without reinstallation
+# - Registry support: Sets up short command aliases
+#
+# Usage:
+#   # First-time setup
+#   ./scripts/nix-config --init --profile desktop --machine-type laptop
+#
+#   # Switch profiles (after init)
+#   ./scripts/nix-config --profile cli-only
+#   ./scripts/nix-config --profile desktop
+#   ./scripts/nix-config --profile full
+#
+#   # Check status
+#   ./scripts/nix-config --status
+#
+#   # Migrate from old setup
+#   ./scripts/nix-config --migrate
+# ==============================================================================
+
+# Script configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+NIX_DIR="$(dirname "$SCRIPT_DIR")"
+STATE_FILE="$HOME/.nix-config-state"
+REQUIRED_FLAKE="flake-improved.nix"  # Requires improved flake with multiple outputs
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# Print functions
+print_banner() {
+    echo ""
+    echo "╔════════════════════════════════════════════════════════╗"
+    echo "║   Nix Configuration Manager                            ║"
+    echo "║   Idempotent Bootstrap & Profile Switching             ║"
+    echo "╚════════════════════════════════════════════════════════╝"
+    echo ""
+}
+
+print_info() { echo -e "${BLUE}ℹ${NC} $1"; }
+print_success() { echo -e "${GREEN}✓${NC} $1"; }
+print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
+print_error() { echo -e "${RED}✗${NC} $1"; }
+print_step() { echo -e "${CYAN}▶${NC} ${BOLD}$1${NC}"; }
+
+# ==============================================================================
+# State Management Functions
+# ==============================================================================
+
+state_exists() {
+    [[ -f "$STATE_FILE" ]]
+}
+
+state_read() {
+    local key=$1
+    if state_exists; then
+        jq -r ".$key // empty" "$STATE_FILE" 2>/dev/null || echo ""
+    else
+        echo ""
+    fi
+}
+
+state_write() {
+    local key=$1
+    local value=$2
+
+    if state_exists; then
+        # Update existing state
+        local tmp=$(mktemp)
+        jq ".$key = \"$value\" | .last_update = \"$(date -Iseconds)\"" "$STATE_FILE" > "$tmp"
+        mv "$tmp" "$STATE_FILE"
+    else
+        # Create new state file
+        cat > "$STATE_FILE" << EOF
+{
+  "$key": "$value",
+  "last_update": "$(date -Iseconds)",
+  "nix_dir": "$NIX_DIR"
+}
+EOF
+    fi
+}
+
+state_init() {
+    cat > "$STATE_FILE" << EOF
+{
+  "bootstrapped": "false",
+  "current_profile": "",
+  "machine_type": "",
+  "last_update": "$(date -Iseconds)",
+  "nix_dir": "$NIX_DIR",
+  "flake_version": "improved"
+}
+EOF
+}
+
+is_bootstrapped() {
+    local bootstrapped=$(state_read "bootstrapped")
+    [[ "$bootstrapped" == "true" ]]
+}
+
+get_current_profile() {
+    state_read "current_profile"
+}
+
+get_machine_type() {
+    state_read "machine_type"
+}
+
+# ==============================================================================
+# Validation Functions
+# ==============================================================================
+
+check_prerequisites() {
+    print_step "Checking prerequisites..."
+
+    # Check if we're in the right directory
+    if [[ ! -f "$NIX_DIR/flake.nix" ]]; then
+        print_error "flake.nix not found in $NIX_DIR"
+        exit 1
+    fi
+
+    # Check if jq is available (for state management)
+    if ! command -v jq &> /dev/null; then
+        print_warning "jq not found, installing..."
+        nix-env -iA nixpkgs.jq
+    fi
+
+    print_success "Prerequisites checked"
+}
+
+check_flake_version() {
+    # Check if using improved flake with multiple outputs
+    if ! grep -q "zeno-cli\|zeno-desktop\|zeno-full" "$NIX_DIR/flake.nix"; then
+        print_error "This script requires the improved flake.nix with multiple outputs"
+        print_info "Please apply flake-improved.nix.example first:"
+        print_info "  cp flake.nix flake.nix.backup"
+        print_info "  mv flake-improved.nix.example flake.nix"
+        exit 1
+    fi
+}
+
+validate_profile() {
+    local profile=$1
+    case $profile in
+        cli-only|desktop|full)
+            return 0
+            ;;
+        *)
+            print_error "Invalid profile: $profile"
+            print_error "Valid profiles: cli-only, desktop, full"
+            return 1
+            ;;
+    esac
+}
+
+validate_machine_type() {
+    local machine_type=$1
+    case $machine_type in
+        laptop|desktop|vm)
+            return 0
+            ;;
+        *)
+            print_error "Invalid machine type: $machine_type"
+            print_error "Valid types: laptop, desktop, vm"
+            return 1
+            ;;
+    esac
+}
+
+# ==============================================================================
+# Detection Functions
+# ==============================================================================
+
+detect_machine_type() {
+    if systemd-detect-virt --quiet; then
+        echo "vm"
+    elif [ -d /sys/class/power_supply/BAT* ] 2>/dev/null || [ -d /sys/class/power_supply/battery ] 2>/dev/null; then
+        echo "laptop"
+    else
+        echo "desktop"
+    fi
+}
+
+detect_current_profile() {
+    # Try to detect from home.nix symlink (old method)
+    if [[ -L "$HOME/.config/home-manager/home.nix" ]]; then
+        local target=$(readlink "$HOME/.config/home-manager/home.nix")
+        case $target in
+            */cli-only.nix) echo "cli-only" ;;
+            */desktop.nix) echo "desktop" ;;
+            */full-system.nix) echo "full" ;;
+            *) echo "unknown" ;;
+        esac
+    else
+        echo "unknown"
+    fi
+}
+
+# ==============================================================================
+# Bootstrap Functions
+# ==============================================================================
+
+bootstrap_system() {
+    local profile=$1
+    local machine_type=$2
+
+    print_banner
+    print_info "Starting bootstrap process..."
+    print_info "  Profile: $profile"
+    print_info "  Machine Type: $machine_type"
+    echo ""
+
+    # Initialize state
+    if ! state_exists; then
+        state_init
+    fi
+
+    # Install home-manager if needed
+    if ! command -v home-manager &> /dev/null; then
+        print_step "Installing home-manager..."
+        if ! nix-channel --list | grep -q home-manager; then
+            nix-channel --add https://github.com/nix-community/home-manager/archive/master.tar.gz home-manager
+            nix-channel --update
+        fi
+        nix-shell '<home-manager>' -A install
+        print_success "home-manager installed"
+    fi
+
+    # System configuration (if full profile)
+    if [[ "$profile" == "full" ]]; then
+        bootstrap_system_config "$machine_type"
+    fi
+
+    # Initialize flake
+    if [[ ! -f "$NIX_DIR/flake.lock" ]]; then
+        print_step "Initializing flake..."
+        cd "$NIX_DIR"
+        nix flake update
+        print_success "Flake initialized"
+    fi
+
+    # Apply configuration
+    switch_to_profile "$profile"
+
+    # Update state
+    state_write "bootstrapped" "true"
+    state_write "current_profile" "$profile"
+    state_write "machine_type" "$machine_type"
+
+    print_success "Bootstrap complete!"
+    show_status
+}
+
+bootstrap_system_config() {
+    local machine_type=$1
+
+    print_step "Configuring NixOS system..."
+
+    # Handle hardware-configuration.nix
+    if [[ ! -f "$NIX_DIR/modules/nixos/hardware-configuration.nix" ]]; then
+        if [[ -f "/etc/nixos/hardware-configuration.nix" ]]; then
+            cp "/etc/nixos/hardware-configuration.nix" "$NIX_DIR/modules/nixos/hardware-configuration.nix"
+            print_success "Copied existing hardware-configuration.nix"
+        else
+            sudo nixos-generate-config --show-hardware-config > "$NIX_DIR/modules/nixos/hardware-configuration.nix"
+            print_success "Generated hardware-configuration.nix"
+        fi
+    fi
+
+    # Update base.nix with machine type
+    if [[ -f "$NIX_DIR/modules/nixos/base.nix" ]]; then
+        cp "$NIX_DIR/modules/nixos/base.nix" "$NIX_DIR/modules/nixos/base.nix.backup"
+        sed -i "s/machineType = \".*\";/machineType = \"$machine_type\";/" "$NIX_DIR/modules/nixos/base.nix"
+        print_success "Updated base.nix with machine type"
+    fi
+
+    # Link system configuration
+    sudo ln -sf "$NIX_DIR/modules/nixos/configuration.nix" /etc/nixos/configuration.nix
+    sudo ln -sf "$NIX_DIR/flake.nix" /etc/nixos/flake.nix
+    print_success "System configuration linked"
+
+    # Rebuild system
+    print_step "Rebuilding NixOS system (this may take a while)..."
+    sudo nixos-rebuild switch --flake "$NIX_DIR#nixos"
+    print_success "NixOS system configuration applied"
+}
+
+# ==============================================================================
+# Profile Switching Functions
+# ==============================================================================
+
+switch_to_profile() {
+    local profile=$1
+
+    validate_profile "$profile" || exit 1
+
+    print_step "Switching to $profile profile..."
+
+    # Determine flake output name
+    local output
+    case $profile in
+        cli-only) output="zeno-cli" ;;
+        desktop)  output="zeno-desktop" ;;
+        full)     output="zeno-full" ;;
+    esac
+
+    # Apply configuration
+    if [[ "$profile" == "full" ]]; then
+        # Full profile needs both NixOS and home-manager
+        print_info "Applying NixOS configuration..."
+        sudo nixos-rebuild switch --flake "$NIX_DIR#nixos"
+
+        print_info "Applying home-manager configuration..."
+        home-manager switch --flake "$NIX_DIR#$output"
+    else
+        # Other profiles only need home-manager
+        home-manager switch --flake "$NIX_DIR#$output"
+    fi
+
+    # Update state
+    state_write "current_profile" "$profile"
+
+    print_success "Switched to $profile profile"
+}
+
+# ==============================================================================
+# Status & Information Functions
+# ==============================================================================
+
+show_status() {
+    echo ""
+    echo "╔════════════════════════════════════════════════════════╗"
+    echo "║   Configuration Status                                 ║"
+    echo "╚════════════════════════════════════════════════════════╝"
+    echo ""
+
+    if is_bootstrapped; then
+        print_success "Configuration: Bootstrapped"
+        print_info "Current Profile: $(get_current_profile)"
+        print_info "Machine Type: $(get_machine_type)"
+        print_info "Nix Directory: $(state_read "nix_dir")"
+        print_info "Last Update: $(state_read "last_update")"
+
+        echo ""
+        print_info "Recent home-manager generations:"
+        home-manager generations 2>/dev/null | head -n 5 || print_warning "Could not read generations"
+    else
+        print_warning "Configuration: Not bootstrapped"
+        print_info "Run with --init to bootstrap the system"
+    fi
+
+    echo ""
+}
+
+show_help() {
+    cat << EOF
+Unified Nix Configuration Manager
+
+Usage:
+  $0 [COMMAND] [OPTIONS]
+
+Commands:
+  --init                 Bootstrap a new system (first-time setup)
+  --profile <name>       Switch to a different profile
+  --status               Show current configuration status
+  --migrate              Migrate from old configuration
+  --help                 Show this help message
+
+Options (for --init):
+  --machine-type <type>  Set machine type (laptop|desktop|vm)
+                         If not specified, will auto-detect
+
+Profiles:
+  cli-only              CLI tools only (minimal)
+  desktop               CLI + Desktop applications
+  full                  Complete system (NixOS + home-manager)
+
+Examples:
+  # First-time setup
+  $0 --init --profile desktop
+
+  # First-time with explicit machine type
+  $0 --init --profile full --machine-type laptop
+
+  # Switch profiles (after bootstrap)
+  $0 --profile cli-only
+  $0 --profile desktop
+
+  # Check status
+  $0 --status
+
+  # Migrate from old configuration
+  $0 --migrate
+
+After Bootstrap:
+  You can also use these shorter commands (if registry is enabled):
+    home-manager switch --flake home:#zeno-cli
+    home-manager switch --flake home:#zeno-desktop
+    sudo nixos-rebuild switch --flake nixos:
+
+  Or use the direct commands:
+    home-manager switch --flake ~/nix#zeno-cli
+    home-manager switch --flake ~/nix#zeno-desktop
+    sudo nixos-rebuild switch --flake ~/nix#nixos
+EOF
+}
+
+# ==============================================================================
+# Migration Function
+# ==============================================================================
+
+migrate_from_old() {
+    print_banner
+    print_step "Migrating from old configuration..."
+
+    # Detect current setup
+    local detected_profile=$(detect_current_profile)
+    local detected_machine_type=$(get_machine_type)
+
+    if [[ -z "$detected_machine_type" ]]; then
+        detected_machine_type=$(detect_machine_type)
+    fi
+
+    print_info "Detected profile: ${detected_profile:-unknown}"
+    print_info "Detected machine type: $detected_machine_type"
+
+    # Ask for confirmation
+    read -p "$(echo -e ${YELLOW}Migrate with these settings? [y/N]:${NC} )" -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        print_warning "Migration cancelled"
+        exit 0
+    fi
+
+    # Create state file
+    state_init
+    state_write "bootstrapped" "true"
+    state_write "current_profile" "$detected_profile"
+    state_write "machine_type" "$detected_machine_type"
+    state_write "migrated" "true"
+
+    print_success "Migration complete!"
+    print_info "State file created at: $STATE_FILE"
+
+    show_status
+}
+
+# ==============================================================================
+# Main Script Logic
+# ==============================================================================
+
+main() {
+    # Parse arguments
+    local command=""
+    local profile=""
+    local machine_type=""
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --init)
+                command="init"
+                shift
+                ;;
+            --profile)
+                if [[ -z "$command" ]]; then
+                    command="switch"
+                fi
+                profile="$2"
+                shift 2
+                ;;
+            --machine-type)
+                machine_type="$2"
+                shift 2
+                ;;
+            --status)
+                command="status"
+                shift
+                ;;
+            --migrate)
+                command="migrate"
+                shift
+                ;;
+            --help|-h)
+                show_help
+                exit 0
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                echo "Use --help for usage information"
+                exit 1
+                ;;
+        esac
+    done
+
+    # Check prerequisites
+    check_prerequisites
+    check_flake_version
+
+    # Execute command
+    case $command in
+        init)
+            # Bootstrap mode
+            if [[ -z "$profile" ]]; then
+                print_error "--init requires --profile <name>"
+                exit 1
+            fi
+
+            if is_bootstrapped; then
+                print_warning "System is already bootstrapped"
+                print_info "Current profile: $(get_current_profile)"
+                read -p "$(echo -e ${YELLOW}Re-bootstrap anyway? [y/N]:${NC} )" -n 1 -r
+                echo
+                if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+                    exit 0
+                fi
+            fi
+
+            # Auto-detect machine type if not specified
+            if [[ -z "$machine_type" ]]; then
+                machine_type=$(detect_machine_type)
+                print_info "Auto-detected machine type: $machine_type"
+            fi
+
+            validate_machine_type "$machine_type" || exit 1
+            bootstrap_system "$profile" "$machine_type"
+            ;;
+
+        switch)
+            # Profile switching mode
+            if [[ -z "$profile" ]]; then
+                print_error "--profile requires a profile name"
+                exit 1
+            fi
+
+            if ! is_bootstrapped; then
+                print_error "System not bootstrapped yet"
+                print_info "Run with --init first"
+                exit 1
+            fi
+
+            switch_to_profile "$profile"
+            ;;
+
+        status)
+            show_status
+            ;;
+
+        migrate)
+            migrate_from_old
+            ;;
+
+        *)
+            print_error "No command specified"
+            echo ""
+            show_help
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function
+main "$@"

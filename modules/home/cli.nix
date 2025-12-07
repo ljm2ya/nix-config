@@ -1,6 +1,8 @@
 { config, lib, pkgs, ... }:
 
 {
+  nixpkgs.config.allowUnfree = true;
+
   imports = [
     ./tmux.nix
   ];
@@ -46,6 +48,7 @@
       glow # CLI markdown viewer
       htop
       jq
+      just  # Command runner (better make)
       nix-search-cli
       poppler
       ttyd
@@ -100,6 +103,11 @@
     # Zsh configuration - migrated from system, using dotfiles
     zsh = {
       enable = true;
+      shellAliases = {
+        # NixOS/home-manager rebuild shortcuts
+        nrs = "sudo nixos-rebuild switch --flake ~/nix#nixos";
+        hms = "home-manager switch --flake ~/nix#zeno";
+      };
       initContent = ''
         # Source custom zsh config if it exists
         [ -f ~/nix/dotfiles/.zshrc ] && source ~/nix/dotfiles/.zshrc

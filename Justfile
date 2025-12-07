@@ -383,7 +383,12 @@ _bootstrap-system machine_type:
             cp /etc/nixos/hardware-configuration.nix {{nix_dir}}/modules/nixos/hardware-configuration.nix; \
             echo "✅ Copied existing hardware-configuration.nix"; \
         else \
-            sudo nixos-generate-config --show-hardware-config > {{nix_dir}}/modules/nixos/hardware-configuration.nix; \
+            if ! NGC_PATH=$(command -v nixos-generate-config); then \
+                echo "❌ Error: nixos-generate-config command not found."; \
+                echo "ℹ️  Please make sure you are running this on a NixOS installer or a NixOS system."; \
+                exit 1; \
+            fi; \
+            sudo "$NGC_PATH" --show-hardware-config > {{nix_dir}}/modules/nixos/hardware-configuration.nix; \
             echo "✅ Generated hardware-configuration.nix"; \
         fi; \
     fi

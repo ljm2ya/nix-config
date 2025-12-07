@@ -51,6 +51,16 @@ switch-full:
     @just _update-state "current_profile" "full"
     @echo "✅ Full system configuration active!"
 
+# Switch to the last used profile
+switch:
+    @last_profile=$(just _get-state current_profile)
+    @if [ -z "$last_profile" ]; then \
+        echo "❌ Error: No last profile found. Please run 'just switch-<profile>' first."; \
+        exit 1; \
+    fi
+    @echo "🔄 Switching to last used profile: $last_profile..."
+    @just switch-$last_profile
+
 # Alias: switch to a profile by name (cli-only, desktop, or full)
 switch profile:
     @just switch-{{profile}}

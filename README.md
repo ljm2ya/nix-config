@@ -62,6 +62,8 @@ just
 ### Bootstrap Steps
 
 ```bash
+# 0. Load dependancies
+nix-shell -p just git
 # 1. Clone repository
 cd ~ && git clone <your-repo-url> nix && cd nix
 

@@ -147,10 +147,21 @@ vim ~/nix/system/base.nix
 ```
 
 **Important settings:**
+- `machineType = "laptop";` - Options: "laptop", "desktop", "vm" (auto-detected during bootstrap)
 - `enableNvidia = false;` - Set to `true` for Nvidia GPU
 - `networking.hostName = "nixos";` - Change to your hostname
 - `time.timeZone = "Asia/Seoul";` - Change to your timezone
 - `users.users.zeno` - Change username if needed
+
+**Machine Type Configuration:**
+
+The system supports three machine types with optimized configurations:
+
+- **Laptop**: Full power management, lid switch handling, battery optimizations, all hardware features
+- **Desktop**: Basic power management, no lid handling, all hardware features
+- **VM**: Minimal configuration, VMware guest tools, disabled hardware features (swap, Bluetooth, graphics acceleration)
+
+The bootstrap script will auto-detect your machine type and configure UUIDs automatically.
 
 #### 3. Generate Hardware Configuration (Full System Only)
 
@@ -171,13 +182,22 @@ sudo nixos-generate-config --show-hardware-config > ~/nix/system/hardware-config
 ./scripts/bootstrap.sh --profile full
 ```
 
-The bootstrap script will:
-- Install home-manager if needed
-- Link system configuration (full system only)
-- Apply NixOS rebuild (full system only)
-- Link home-manager profile
-- Apply home-manager configuration
-- Verify installation
+**What the Bootstrap Script Does:**
+
+For all profiles:
+- Installs home-manager if needed
+- Links home-manager profile
+- Applies home-manager configuration
+- Verifies installation
+
+For full system profile (additional steps):
+- Auto-detects machine type (laptop/desktop/vm)
+- Prompts for confirmation with detected default
+- Auto-detects swap and resume device UUIDs
+- Updates `system/base.nix` with detected values
+- Generates hardware configuration if missing
+- Links system configuration to `/etc/nixos/`
+- Runs `nixos-rebuild switch`
 
 #### 5. Verify Installation
 
@@ -312,9 +332,31 @@ vim ~/nix/dotfiles/.config/awesome/rc.lua
 # Display configuration
 vim ~/nix/dotfiles/.xinitrc
 
-# Boot and swap configuration
+# Machine type and hardware configuration
 vim ~/nix/system/base.nix
 ```
+
+**Machine Type Settings** (in `system/base.nix`):
+
+```nix
+# Machine type determines which features are enabled
+machineType = "laptop";  # Options: "laptop", "desktop", "vm"
+
+# GPU configuration
+enableNvidia = false;  # Set to true for Nvidia GPU
+
+# Hardware UUIDs (auto-detected during bootstrap)
+swapUUID = "your-swap-uuid";
+resumeUUID = "your-resume-uuid";
+```
+
+**What Each Type Enables:**
+
+- **Laptop**: Power management, lid switch (suspend-then-hibernate), battery handling, all hardware features
+- **Desktop**: Power management, power button handling (no lid switch), all hardware features
+- **VM**: VMware guest tools only, disables: swap, hardware graphics, Bluetooth, firmware, power management
+
+To change machine type after installation, edit `machineType` in `system/base.nix` and run `sudo nixos-rebuild switch`.
 
 ### Multi-Machine Setup
 

@@ -86,10 +86,62 @@ if [[ "$PROFILE" == "full" ]]; then
     SYSTEM_CONFIG=true
 fi
 
+# Machine type detection (only for system config)
+MACHINE_TYPE=""
+if [[ "$SYSTEM_CONFIG" = true ]]; then
+    echo ""
+    print_info "Detecting machine type..."
+
+    # Try to detect if running in VM
+    if systemd-detect-virt --quiet; then
+        DETECTED_TYPE="vm"
+        print_info "Detected: Virtual Machine"
+    # Check for battery (laptop indicator)
+    elif [ -d /sys/class/power_supply/BAT* ] 2>/dev/null || [ -d /sys/class/power_supply/battery ] 2>/dev/null; then
+        DETECTED_TYPE="laptop"
+        print_info "Detected: Laptop (battery found)"
+    else
+        DETECTED_TYPE="desktop"
+        print_info "Detected: Desktop"
+    fi
+
+    echo ""
+    print_info "Select machine type:"
+    echo "  1) Laptop  - Full power management, lid switch handling"
+    echo "  2) Desktop - Basic power management, no lid handling"
+    echo "  3) VM      - Minimal hardware config, VMware guest tools"
+    echo ""
+
+    # Default selection based on detection
+    case $DETECTED_TYPE in
+        laptop)  DEFAULT_CHOICE=1 ;;
+        desktop) DEFAULT_CHOICE=2 ;;
+        vm)      DEFAULT_CHOICE=3 ;;
+    esac
+
+    read -p "$(echo -e ${YELLOW}Enter choice [${DEFAULT_CHOICE}]:${NC} )" MACHINE_CHOICE
+    MACHINE_CHOICE=${MACHINE_CHOICE:-$DEFAULT_CHOICE}
+
+    case $MACHINE_CHOICE in
+        1) MACHINE_TYPE="laptop" ;;
+        2) MACHINE_TYPE="desktop" ;;
+        3) MACHINE_TYPE="vm" ;;
+        *)
+            print_error "Invalid choice"
+            exit 1
+            ;;
+    esac
+
+    print_success "Machine type: $MACHINE_TYPE"
+fi
+
 echo ""
 print_info "Configuration:"
 print_info "  Profile: $PROFILE"
 print_info "  System config: $([ "$SYSTEM_CONFIG" = true ] && echo 'yes' || echo 'no')"
+if [[ "$SYSTEM_CONFIG" = true ]]; then
+    print_info "  Machine type: $MACHINE_TYPE"
+fi
 echo ""
 
 # Confirm before proceeding
@@ -140,6 +192,61 @@ if [[ "$SYSTEM_CONFIG" = true ]]; then
         print_warning "You may need to customize boot/swap settings"
     else
         print_success "hardware-configuration.nix exists"
+    fi
+
+    # Detect and configure UUIDs (skip for VM)
+    if [[ "$MACHINE_TYPE" != "vm" ]]; then
+        print_info "Detecting swap and resume device UUIDs..."
+
+        # Try to find swap partition UUID
+        SWAP_UUID=$(lsblk -no UUID,TYPE | awk '$2=="part" {print $1}' | while read uuid; do
+            if swapon --show=UUID --noheadings | grep -q "$uuid" 2>/dev/null; then
+                echo "$uuid"
+                break
+            fi
+        done)
+
+        # If no active swap, try to find swap partition by type
+        if [[ -z "$SWAP_UUID" ]]; then
+            SWAP_UUID=$(lsblk -no UUID,FSTYPE | awk '$2=="swap" {print $1; exit}')
+        fi
+
+        # Resume device is usually the same as swap
+        RESUME_UUID="$SWAP_UUID"
+
+        if [[ -n "$SWAP_UUID" ]]; then
+            print_success "Swap UUID: $SWAP_UUID"
+        else
+            print_warning "No swap device found - hibernation will be disabled"
+            SWAP_UUID="00000000-0000-0000-0000-000000000000"  # Placeholder
+            RESUME_UUID="$SWAP_UUID"
+        fi
+    else
+        print_info "VM detected - skipping UUID detection"
+        SWAP_UUID=""
+        RESUME_UUID=""
+    fi
+
+    # Update base.nix with machine type and UUIDs
+    print_info "Updating base.nix with machine type and UUIDs..."
+
+    # Create a backup
+    cp "$NIX_DIR/system/base.nix" "$NIX_DIR/system/base.nix.backup"
+
+    # Update machine type
+    sed -i "s/machineType = \".*\";/machineType = \"$MACHINE_TYPE\";/" "$NIX_DIR/system/base.nix"
+
+    # Update UUIDs (only if not VM)
+    if [[ "$MACHINE_TYPE" != "vm" ]] && [[ -n "$SWAP_UUID" ]]; then
+        sed -i "s/swapUUID = \".*\";/swapUUID = \"$SWAP_UUID\";/" "$NIX_DIR/system/base.nix"
+        sed -i "s/resumeUUID = \".*\";/resumeUUID = \"$RESUME_UUID\";/" "$NIX_DIR/system/base.nix"
+    fi
+
+    print_success "base.nix updated"
+    print_info "  Machine type: $MACHINE_TYPE"
+    if [[ "$MACHINE_TYPE" != "vm" ]]; then
+        print_info "  Swap UUID: ${SWAP_UUID:0:8}..."
+        print_info "  Resume UUID: ${RESUME_UUID:0:8}..."
     fi
 
     # Link system configuration

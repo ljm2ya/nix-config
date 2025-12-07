@@ -2,11 +2,24 @@
 
 let
   # =================================================================
-  #  SYSTEM PROFILE SWITCH
-  #  Change this to 'true' to activate Nvidia configuration.
-  #  Change to 'false' for Intel Integrated graphics only.
+  #  MACHINE TYPE CONFIGURATION
+  #  Set your machine type: "laptop", "desktop", or "vm"
+  #  This can be overridden during bootstrap
   # =================================================================
-  enableNvidia = false;
+  machineType = "laptop";  # Options: "laptop", "desktop", "vm"
+
+  # GPU configuration
+  enableNvidia = false;  # Set to true for Nvidia GPU
+
+  # Helper functions
+  isLaptop = machineType == "laptop";
+  isDesktop = machineType == "desktop";
+  isVM = machineType == "vm";
+
+  # Hardware UUIDs (auto-detected during bootstrap, or set manually)
+  # For VM: these will be empty/disabled
+  swapUUID = "5a4cf021-8203-453b-877f-164c5c6e1128";  # Replace with your swap UUID
+  resumeUUID = "5a4cf021-8203-453b-877f-164c5c6e1128";  # Replace with your resume device UUID
 in
 {
   # Base system configuration - hardware, drivers, kernel, system services
@@ -25,16 +38,21 @@ in
       efi.canTouchEfiVariables = false;
     };
 
-    # Kernel Parameters: Conditional based on GPU
-    kernelParams = [
-      "resume=${config.boot.resumeDevice}"
-    ] ++ (if enableNvidia then [
-      "nvidia-drm.modeset=1" # Essential for NVIDIA hibernation/wayland
-    ] else [
-      "i915.enable_guc=3"    # Intel GuC for iGPU
-    ]);
-    kernelModules = ["iwlwifi"];
-    resumeDevice = "/dev/disk/by-uuid/5a4cf021-8203-453b-877f-164c5c6e1128";
+    # Kernel Parameters: Conditional based on machine type and GPU
+    kernelParams = lib.optionals (!isVM) (
+      [ "resume=/dev/disk/by-uuid/${resumeUUID}" ] ++
+      (if enableNvidia then [
+        "nvidia-drm.modeset=1"  # Essential for NVIDIA hibernation/wayland
+      ] else [
+        "i915.enable_guc=3"     # Intel GuC for iGPU
+      ])
+    );
+
+    # Kernel modules: Only for physical hardware
+    kernelModules = lib.optionals (!isVM) [ "iwlwifi" ];
+
+    # Resume device: Only for physical hardware with swap
+    resumeDevice = lib.mkIf (!isVM) "/dev/disk/by-uuid/${resumeUUID}";
   };
 
   # === Nix Configuration ===
@@ -45,18 +63,28 @@ in
   };
 
   # === Power Management ===
-  powerManagement.enable = true;
+  # Enabled for laptop and desktop, disabled for VM
+  powerManagement.enable = !isVM;
 
-  services.logind.extraConfig = ''
-    HandleLidSwitch=suspend-then-hibernate
-    HandleLidSwitchExternalPower=suspend
-    HandlePowerKey=hibernate
-    HandlePowerKeyLongPress=poweroff
-    PowerKeyIgnoreInhibited=yes
-  '';
+  # Logind configuration: Conditional based on machine type
+  services.logind.extraConfig =
+    if isLaptop then ''
+      HandleLidSwitch=suspend-then-hibernate
+      HandleLidSwitchExternalPower=suspend
+      HandlePowerKey=hibernate
+      HandlePowerKeyLongPress=poweroff
+      PowerKeyIgnoreInhibited=yes
+    ''
+    else if isDesktop then ''
+      HandlePowerKey=hibernate
+      HandlePowerKeyLongPress=poweroff
+      PowerKeyIgnoreInhibited=yes
+    ''
+    else "";  # VM: no special power handling
 
-  swapDevices = [{
-    device = "/dev/disk/by-uuid/5a4cf021-8203-453b-877f-164c5c6e1128";
+  # Swap devices: Only for physical hardware
+  swapDevices = lib.optionals (!isVM) [{
+    device = "/dev/disk/by-uuid/${swapUUID}";
   }];
 
   # === Networking ===
@@ -93,7 +121,7 @@ in
   };
 
   # === Audio ===
-  security.rtkit.enable = true; # Realtime scheduler for Pipewire
+  security.rtkit.enable = true;
 
   services.pipewire = {
     enable = true;
@@ -115,16 +143,16 @@ in
     powerOnBoot = true;
     settings = {
       General = {
-        Experimental = true; # Show battery charge
+        Experimental = true;
       };
     };
   };
   services.blueman.enable = true;
 
-  # === Graphics Configuration (Conditional) ===
-  hardware.graphics = {
+  # === Graphics Configuration ===
+  # Only for physical hardware, disabled for VM
+  hardware.graphics = lib.mkIf (!isVM) {
     enable = true;
-    # Load Intel specific media drivers ONLY if we are NOT using Nvidia mode
     extraPackages = if enableNvidia then [] else with pkgs; [
       intel-media-driver     # VA-API (iHD) userspace
       vpl-gpu-rt             # oneVPL (QSV) runtime
@@ -132,20 +160,22 @@ in
     ];
   };
 
-  environment.sessionVariables = {
-    # If Nvidia is disabled, force Intel iHD. If Nvidia is enabled, let it auto-detect or set to nvidia.
+  # Session variables: Only for physical hardware
+  environment.sessionVariables = lib.mkIf (!isVM) {
     LIBVA_DRIVER_NAME = if enableNvidia then "nvidia" else "iHD";
   };
 
-  hardware.enableRedistributableFirmware = true;
+  # Firmware: Only for physical hardware
+  hardware.enableRedistributableFirmware = !isVM;
 
-  # Select Video Drivers based on switch
-  services.xserver.videoDrivers = if enableNvidia
-    then [ "nvidia" ]
+  # Video drivers: Conditional based on machine type
+  services.xserver.videoDrivers =
+    if isVM then [ "vmware" "modesetting" ]
+    else if enableNvidia then [ "nvidia" ]
     else [ "modesetting" ];
 
-  # === Nvidia Specific Config (Active only when enableNvidia = true) ===
-  hardware.nvidia = lib.mkIf enableNvidia {
+  # === Nvidia Specific Config ===
+  hardware.nvidia = lib.mkIf (enableNvidia && !isVM) {
     modesetting.enable = true;
     powerManagement.enable = true;
     powerManagement.finegrained = true;
@@ -163,10 +193,13 @@ in
     };
   };
 
+  # === VM Specific Configuration ===
+  virtualisation.vmware.guest.enable = isVM;
+
   # === System Services ===
   services = {
     openssh.enable = true;
-    acpid.enable = true; # battery status daemon
+    acpid.enable = !isVM;  # Battery status daemon - only for physical hardware
     mullvad-vpn = {
       enable = true;
       package = pkgs.mullvad-vpn;
@@ -185,7 +218,7 @@ in
   services.getty.autologinUser = "zeno";
 
   # === System Programs ===
-  programs.zsh.enable = true; # Enable zsh system-wide
+  programs.zsh.enable = true;
 
   # === System Packages ===
   nixpkgs.config.allowUnfree = true;

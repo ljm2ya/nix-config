@@ -13,6 +13,7 @@ sudo ln -sf ~/nix/flake.nix /etc/nixos/flake.nix
 echo "Applying system configuration (flake-based)..."
 sudo nixos-rebuild switch --flake ~/nix#nixos
 
+
 echo "Applying home-manager configuration (flake-based)..."
 home-manager switch --flake ~/nix#zeno
 

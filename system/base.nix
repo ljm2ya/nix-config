@@ -34,7 +34,7 @@ in
     loader = {
       systemd-boot.enable = true;
       systemd-boot.sortKey = "z-nixos";
-      efi.canTouchEfiVariables = true;
+      efi.canTouchEfiVariables = false;
     };
 
     # Kernel Parameters: Conditional based on machine type and GPU

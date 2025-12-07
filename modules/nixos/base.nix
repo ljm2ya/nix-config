@@ -8,6 +8,10 @@ let
   # =================================================================
   machineType = "laptop";  # Options: "laptop", "desktop", "vm"
 
+  # Bootloader configuration (will be auto-detected during bootstrap)
+  bootloader = "systemd-boot"; # Options: "systemd-boot", "grub"
+  grubDevice = "/dev/sda";     # Dummy, will be replaced by bootstrap script
+
   # GPU configuration
   enableNvidia = false;  # Set to true for Nvidia GPU
 
@@ -31,11 +35,15 @@ in
 
   # === Boot Configuration ===
   boot = {
-    loader = {
-      systemd-boot.enable = true;
-      systemd-boot.sortKey = "z-nixos";
-      efi.canTouchEfiVariables = false;
-    };
+    loader =
+      if bootloader == "grub" then {
+        grub.enable = true;
+        grub.device = grubDevice;
+      } else { # systemd-boot is default
+        systemd-boot.enable = true;
+        systemd-boot.sortKey = "z-nixos";
+        efi.canTouchEfiVariables = false;
+      };
 
     # Kernel Parameters: Conditional based on machine type and GPU
     kernelParams = lib.optionals (!isVM) (

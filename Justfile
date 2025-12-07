@@ -404,6 +404,24 @@ _bootstrap-system machine_type:
     @if [ -f "{{nix_dir}}/modules/nixos/base.nix" ]; then \
         sed -i "s/machineType = \".*\";/machineType = \"{{machine_type}}\";/" {{nix_dir}}/modules/nixos/base.nix; \
         echo "✅ Updated base.nix with machine type"; \
+        if [ "{{machine_type}}" != "vm" ]; then \
+            echo "⚙️  Detecting swap and resume UUIDs..."; \
+            SWAP_UUID=$(lsblk -no UUID,TYPE | awk '$$2=="part" {print $$1}' | while read uuid; do if swapon --show=UUID --noheadings | grep -q "$$uuid" 2>/dev/null; then echo "$$uuid"; break; fi; done); \
+            if [ -z "$SWAP_UUID" ]; then \
+                SWAP_UUID=$(lsblk -no UUID,FSTYPE | awk '$$2=="swap" {print $$1; exit}'); \
+            fi; \
+            if [ -n "$SWAP_UUID" ]; then \
+                echo "ℹ️  Found Swap UUID: $SWAP_UUID"; \
+                RESUME_UUID="$SWAP_UUID"; \
+                sed -i "s/swapUUID = \".*\";/swapUUID = \"$SWAP_UUID\";/" {{nix_dir}}/modules/nixos/base.nix; \
+                sed -i "s/resumeUUID = \".*\";/resumeUUID = \"$RESUME_UUID\";/" {{nix_dir}}/modules/nixos/base.nix; \
+                echo "✅ Updated base.nix with swap and resume UUIDs."; \
+            else \
+                echo "⚠️  No swap partition found. Hibernation will be disabled."; \
+            fi; \
+        else \
+            echo "ℹ️  VM detected, skipping swap UUID detection."; \
+        fi; \
     fi
     @sudo ln -sf {{nix_dir}}/modules/nixos/configuration.nix /etc/nixos/configuration.nix
     @sudo ln -sf {{nix_dir}}/flake.nix /etc/nixos/flake.nix

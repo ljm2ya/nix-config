@@ -11,6 +11,7 @@ Modern, declarative NixOS and Home Manager configuration with multiple profiles,
 - ✅ **Idempotent Bootstrap** - Safe, resumable setup
 - ✅ **State Tracking** - Know what's configured
 - ✅ **Version-controlled Dotfiles** - Including Doom Emacs
+- ✅ **Encrypted SSH Backup** - Safe key storage in git
 
 ## Quick Start
 
@@ -135,6 +136,29 @@ just git-add             # Add all changes
 just git-commit "msg"    # Commit with message
 just git-save            # Quick commit with timestamp
 ```
+
+### Secrets Management
+
+Securely backup SSH keys to this repository with age encryption:
+
+```bash
+# Backup SSH keys (encrypt with passphrase)
+just ssh-backup
+
+# List encrypted keys
+just ssh-list
+
+# Restore SSH keys (decrypt with passphrase)
+just ssh-restore
+```
+
+**How it works:**
+- Keys are encrypted with [age](https://github.com/FiloSottile/age) using a passphrase
+- Encrypted `.age` files are **safe to commit to GitHub**
+- During `just init`, you'll be prompted to restore keys automatically
+- Unencrypted keys are protected by `.gitignore`
+
+See [secrets/README.md](secrets/README.md) for detailed documentation.
 
 ## Directory Structure
 

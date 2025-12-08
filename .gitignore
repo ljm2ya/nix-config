@@ -29,3 +29,14 @@ Thumbs.db
 # System-specific hardware configuration
 # This file is generated on each machine and should not be in git
 /modules/nixos/hardware-configuration.nix
+
+# SSH Keys - NEVER commit unencrypted keys
+secrets/ssh/*.key
+secrets/ssh/id_*
+secrets/ssh/*.pem
+secrets/ssh/gcloud
+secrets/ssh/*.txt
+*.age.key
+*_passphrase.txt
+
+# Only encrypted .age files should be committed in secrets/

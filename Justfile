@@ -139,6 +139,7 @@ migrate:
     read -p "Migrate with these settings? [y/N]: " -n 1 -r; \
     echo; \
     if [[ $$REPLY =~ ^[Yy]$$ ]]; then \
+        just _restore-ssh-keys; \
         just _create-state "bootstrapped" "true"; \
         just _update-state "current_profile" "$detected_profile"; \
         just _update-state "machine_type" "$detected_machine"; \
@@ -229,6 +230,95 @@ git-save:
     @cd {{nix_dir}} && \
     git add . && \
     git commit -m "Update configuration - $(date '+%Y-%m-%d %H:%M')"
+
+# ═══════════════════════════════════════════════════════════════
+# Secrets Management
+# ═══════════════════════════════════════════════════════════════
+
+# Encrypt SSH keys for backup (safe to commit to GitHub)
+ssh-backup:
+    @echo "🔐 Encrypting SSH keys..."
+    @if ! command -v age &> /dev/null; then \
+        echo "❌ Error: 'age' not found"; \
+        echo "Install with: nix-shell -p age"; \
+        exit 1; \
+    fi
+    @mkdir -p {{nix_dir}}/secrets/ssh
+    @echo "⚠️  You'll be prompted for a passphrase (remember it!)"
+    @echo ""
+    @count=0; \
+    for key in $(ls -1 ~/.ssh/ 2>/dev/null | grep -v -E '\.pub$|known_hosts|config|authorized_keys'); do \
+        if [ -f ~/.ssh/$key ]; then \
+            echo "🔒 Encrypting: $key"; \
+            age --encrypt --passphrase --output {{nix_dir}}/secrets/ssh/$key.age ~/.ssh/$key && \
+            count=$((count + 1)); \
+        fi; \
+    done; \
+    echo ""; \
+    echo "✅ Encrypted $count key(s) to secrets/ssh/"; \
+    echo ""; \
+    echo "Next steps:"; \
+    echo "  1. git add secrets/ssh/*.age"; \
+    echo "  2. git commit -m 'Add encrypted SSH keys'"; \
+    echo "  3. git push"
+
+# Restore SSH keys from encrypted backup
+ssh-restore:
+    @echo "🔓 Restoring SSH keys from backup..."
+    @if ! command -v age &> /dev/null; then \
+        echo "❌ Error: 'age' not found"; \
+        echo "Install with: nix-shell -p age"; \
+        exit 1; \
+    fi
+    @if [ ! -d "{{nix_dir}}/secrets/ssh" ]; then \
+        echo "❌ No encrypted keys found in secrets/ssh/"; \
+        exit 1; \
+    fi
+    @mkdir -p ~/.ssh
+    @chmod 700 ~/.ssh
+    @echo "🔑 Enter your encryption passphrase"
+    @echo ""
+    @count=0; \
+    for encrypted in {{nix_dir}}/secrets/ssh/*.age; do \
+        if [ -f "$encrypted" ]; then \
+            keyname=$(basename "$encrypted" .age); \
+            echo "🔓 Decrypting: $keyname"; \
+            if age --decrypt --output ~/.ssh/$keyname "$encrypted"; then \
+                chmod 600 ~/.ssh/$keyname; \
+                count=$((count + 1)); \
+            fi; \
+        fi; \
+    done; \
+    echo ""; \
+    echo "✅ Restored $count key(s) to ~/.ssh/"; \
+    echo ""; \
+    echo "Test with:"; \
+    echo "  ssh-add -l"; \
+    echo "  ssh -T git@github.com"
+
+# List encrypted SSH keys
+ssh-list:
+    @echo "🔐 Encrypted SSH Keys"
+    @echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    @if [ -d "{{nix_dir}}/secrets/ssh" ]; then \
+        count=0; \
+        for file in {{nix_dir}}/secrets/ssh/*.age; do \
+            if [ -f "$file" ]; then \
+                name=$(basename "$file"); \
+                size=$(du -h "$file" | cut -f1); \
+                echo "✓ $name ($size)"; \
+                count=$((count + 1)); \
+            fi; \
+        done; \
+        if [ $count -eq 0 ]; then \
+            echo "No encrypted keys found"; \
+        else \
+            echo ""; \
+            echo "Total: $count encrypted key(s)"; \
+        fi; \
+    else \
+        echo "No secrets directory found"; \
+    fi
 
 # ═══════════════════════════════════════════════════════════════
 # Development & Testing
@@ -345,6 +435,33 @@ _detect-old-profile:
         echo "desktop"; \
     fi
 
+# Restore SSH keys if available
+_restore-ssh-keys:
+    @echo ""
+    @echo "🔑 Checking for encrypted SSH keys..."
+    @if [ -d "{{nix_dir}}/secrets/ssh" ] && [ -n "$(ls -A {{nix_dir}}/secrets/ssh/*.age 2>/dev/null)" ]; then \
+        echo "✓ Found encrypted SSH keys"; \
+        echo ""; \
+        read -p "Restore SSH keys now? [Y/n]: " -n 1 -r; \
+        echo; \
+        if [[ ! $$REPLY =~ ^[Nn]$$ ]]; then \
+            if ! command -v age &> /dev/null; then \
+                echo "Installing age..."; \
+                nix-shell -p age --run "echo '✓ age installed'"; \
+            fi; \
+            echo ""; \
+            nix-shell -p age --run "cd {{nix_dir}} && just ssh-restore" || \
+            echo "⚠️  SSH key restoration failed - you can restore later with: just ssh-restore"; \
+        else \
+            echo "⏭️  Skipped SSH key restoration"; \
+            echo "ℹ️  Run 'just ssh-restore' later to restore keys"; \
+        fi; \
+    else \
+        echo "ℹ️  No encrypted SSH keys found (this is normal for first-time setup)"; \
+        echo "ℹ️  After setup, backup keys with: just ssh-backup"; \
+    fi
+    @echo ""
+
 # Bootstrap implementation
 _bootstrap profile machine_type:
     @echo "📦 Installing prerequisites..."
@@ -355,6 +472,7 @@ _bootstrap profile machine_type:
         nix-shell '<home-manager>' -A install; \
     fi
     @echo "✅ Prerequisites installed"
+    @just _restore-ssh-keys
     @if [ "{{profile}}" = "full" ]; then \
         just _bootstrap-system {{machine_type}}; \
     fi

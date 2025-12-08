@@ -36,20 +36,20 @@
   # GUI dotfiles management
   home.file = {
     # X11 configuration files
-    ".xinitrc".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix/dotfiles/.xinitrc";
-    ".Xmodmap".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix/dotfiles/.Xmodmap";
+    ".xinitrc".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix-config/dotfiles/.xinitrc";
+    ".Xmodmap".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix-config/dotfiles/.Xmodmap";
 
     # Awesome WM configuration
-    ".config/awesome".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix/dotfiles/.config/awesome";
+    ".config/awesome".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix-config/dotfiles/.config/awesome";
 
     # Alacritty configuration
-    ".config/alacritty".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix/dotfiles/.config/alacritty";
+    ".config/alacritty".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix-config/dotfiles/.config/alacritty";
 
     # Rofi configuration
-    ".config/rofi".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix/dotfiles/.config/rofi";
+    ".config/rofi".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix-config/dotfiles/.config/rofi";
 
     # Doom Emacs configuration
-    ".doom.d".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix/dotfiles/.doom.d";
+    ".doom.d".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix-config/dotfiles/.doom.d";
   };
 
   # GUI-specific program configurations

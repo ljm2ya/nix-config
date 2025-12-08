@@ -74,7 +74,7 @@
     # Dotfiles management with stow-like approach
     file = {
       # Create symlinks to actual dotfiles (excluding those managed by programs)
-      ".vimrc".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix/dotfiles/.vimrc";
+      ".vimrc".source = config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nix-config/dotfiles/.vimrc";
     };
   };
 
@@ -96,7 +96,7 @@
     git = {
       enable = true;
       includes = [
-        { path = "${config.home.homeDirectory}/nix/dotfiles/.gitconfig"; }
+        { path = "${config.home.homeDirectory}/nix-config/dotfiles/.gitconfig"; }
       ];
     };
 
@@ -105,12 +105,12 @@
       enable = true;
       shellAliases = {
         # NixOS/home-manager rebuild shortcuts
-        nrs = "sudo nixos-rebuild switch --flake ~/nix#nixos";
-        hms = "home-manager switch --flake ~/nix#zeno";
+        nrs = "sudo nixos-rebuild switch --flake ~/nix-config#nixos";
+        hms = "home-manager switch --flake ~/nix-config#zeno";
       };
       initContent = ''
         # Source custom zsh config if it exists
-        [ -f ~/nix/dotfiles/.zshrc ] && source ~/nix/dotfiles/.zshrc
+        [ -f ~/nix-config/dotfiles/.zshrc ] && source ~/nix-config/dotfiles/.zshrc
       '';
     };
 

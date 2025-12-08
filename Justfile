@@ -28,7 +28,7 @@ default:
 switch-cli:
     @echo "🔄 Switching to CLI-only profile..."
     @just _check-bootstrapped
-    home-manager switch --flake flake:home#zeno-cli --impure
+    home-manager switch --flake {{nix_dir}}#zeno-cli
     @just _update-state "current_profile" "cli-only"
     @echo "✅ CLI-only profile active!"
 
@@ -36,7 +36,7 @@ switch-cli:
 switch-desktop:
     @echo "🔄 Switching to desktop profile..."
     @just _check-bootstrapped
-    home-manager switch --flake flake:home#zeno-desktop --impure
+    home-manager switch --flake {{nix_dir}}#zeno-desktop
     @just _update-state "current_profile" "desktop"
     @echo "✅ Desktop profile active!"
 
@@ -47,7 +47,7 @@ switch-full:
     @echo "📦 Applying NixOS configuration..."
     sudo nixos-rebuild switch --flake {{nix_dir}}#nixos
     @echo "🏠 Applying home-manager configuration..."
-    home-manager switch --flake flake:home#zeno-full --impure
+    home-manager switch --flake {{nix_dir}}#zeno-full
     @just _update-state "current_profile" "full"
     @echo "✅ Full system configuration active!"
 
@@ -252,7 +252,7 @@ run app:
 # Test profile switch without applying (dry-run)
 test-switch profile:
     @echo "🧪 Testing {{profile}} profile switch (dry-run)..."
-    home-manager switch --flake flake:home#zeno-{{profile}} --impure --dry-run
+    home-manager switch --flake {{nix_dir}}#zeno-{{profile}} --dry-run
 
 # ═══════════════════════════════════════════════════════════════
 # Utility Commands
@@ -363,11 +363,11 @@ _bootstrap profile machine_type:
     @echo "🔄 Applying configuration..."
     @if [ "{{profile}}" = "full" ]; then \
         sudo nixos-rebuild switch --flake {{nix_dir}}#nixos; \
-        home-manager switch --flake flake:home#zeno-full --impure; \
+        home-manager switch --flake {{nix_dir}}#zeno-full; \
     elif [ "{{profile}}" = "desktop" ]; then \
-        home-manager switch --flake flake:home#zeno-desktop --impure; \
+        home-manager switch --flake {{nix_dir}}#zeno-desktop; \
     else \
-        home-manager switch --flake flake:home#zeno-cli --impure; \
+        home-manager switch --flake {{nix_dir}}#zeno-cli; \
     fi
     @just _create-state "bootstrapped" "true"
     @just _update-state "current_profile" "{{profile}}"

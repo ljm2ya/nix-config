@@ -33,6 +33,11 @@ in
   imports = [
   ];
 
+  # Export machine type as a module argument for other modules to use
+  _module.args = {
+    inherit machineType isLaptop isDesktop isVM;
+  };
+
   # === Boot Configuration ===
   boot = {
     loader =

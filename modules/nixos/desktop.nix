@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, isLaptop ? false, ... }:
 
 {
   # System-level GUI configuration
@@ -18,7 +18,8 @@
 
   # === Keyboard Remapping (system-level) ===
   # Swap Ctrl and Capslock for internal laptop keyboard
-  services.keyd = {
+  # Only enabled on laptops
+  services.keyd = lib.mkIf isLaptop {
     enable = true;
     keyboards = {
       internal = {
@@ -34,7 +35,8 @@
   };
 
   # === Touchpad Configuration ===
-  services.libinput = {
+  # Only enabled on laptops
+  services.libinput = lib.mkIf isLaptop {
     enable = true;
     touchpad = {
       naturalScrolling = true;

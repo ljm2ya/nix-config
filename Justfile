@@ -51,6 +51,15 @@ switch-full:
     @just _update-state "current_profile" "full"
     @echo "✅ Full system configuration active!"
 
+# Switch to full system profile but only home-manager 
+switch-home:
+    @echo "🔄 Switching to full system (only home-manager) configuration..."
+    @just _check-bootstrapped
+    @echo "🏠 Applying home-manager configuration..."
+    home-manager switch --flake {{nix_dir}}#zeno-full
+    @just _update-state "current_profile" "full"
+    @echo "✅ Full system home configuration active!"
+
 # Switch to a profile. If no profile is specified, switch to the last used profile.
 switch profile="":
     @if [ -z "{{profile}}" ]; then \

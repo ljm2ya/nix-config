@@ -377,6 +377,15 @@ clientkeys = gears.table.join(
     awful.key({ modkey,           }, "f",
         function (c)
             c.fullscreen = not c.fullscreen
+            if c.fullscreen then
+                -- Hide titlebars in fullscreen
+                awful.titlebar.hide(c)
+                c.border_width = 0
+            else
+                -- Show titlebars when exiting fullscreen
+                awful.titlebar.show(c)
+                c.border_width = beautiful.border_width
+            end
             c:raise()
         end,
         {description = "toggle fullscreen", group = "client"}),
@@ -540,6 +549,22 @@ awful.rules.rules = {
     -- Set Firefox to always map on the tag named "2" on screen 1.
     -- { rule = { class = "Firefox" },
     --   properties = { screen = 1, tag = "2" } },
+
+    -- Firefox fullscreen fix - keep titlebars but hide them in fullscreen
+    { rule_any = { class = { "firefox", "Firefox" } },
+      properties = { },
+      callback = function(c)
+        c:connect_signal("property::fullscreen", function()
+          if c.fullscreen then
+            awful.titlebar.hide(c)
+            c.border_width = 0
+          else
+            awful.titlebar.show(c)
+            c.border_width = beautiful.border_width
+          end
+        end)
+      end
+    },
 }
 -- }}}
 
@@ -606,6 +631,37 @@ end)
 
 client.connect_signal("focus", function(c) c.border_color = beautiful.border_focus end)
 client.connect_signal("unfocus", function(c) c.border_color = beautiful.border_normal end)
+
+-- Auto-hide wibar when client is fullscreen
+local function update_wibar_visibility()
+    local c = client.focus
+    if c and c.fullscreen then
+        -- Hide wibar on the screen with fullscreen client
+        c.screen.mywibox.visible = false
+    else
+        -- Show wibar on all screens when no fullscreen client
+        for s in screen do
+            s.mywibox.visible = true
+        end
+    end
+end
+
+client.connect_signal("property::fullscreen", function(c)
+    update_wibar_visibility()
+    -- Force geometry update
+    if c.fullscreen then
+        c:geometry({
+            x = c.screen.geometry.x,
+            y = c.screen.geometry.y,
+            width = c.screen.geometry.width,
+            height = c.screen.geometry.height
+        })
+    end
+end)
+client.connect_signal("manage", update_wibar_visibility)
+client.connect_signal("unmanage", update_wibar_visibility)
+client.connect_signal("focus", update_wibar_visibility)
+client.connect_signal("unfocus", update_wibar_visibility)
 -- }}}
 --
 --

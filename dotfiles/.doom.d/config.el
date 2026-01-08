@@ -92,6 +92,31 @@ apps are not started from a shell."
 ;;(use-package vterm :ensure t)
 (setq claude-code-terminal-backend 'vterm)
 
+(use-package! ts-fold
+  :config
+  ;; Example: Enable it globally
+  (global-ts-fold-mode 1)
+
+  ;; Or enable it for specific modes only
+  ;; (add-hook 'python-ts-mode-hook #'treesit-fold-mode)
+  )
+
+(use-package! kirigami
+  :config
+  ;; Example: Enable globally
+  ;; (global-kirigami-mode 1)
+  
+  ;; Or add custom keys
+  )
+
+;; Configure Kirigami to replace the default Evil-mode folding key bindings
+(with-eval-after-load 'evil
+  (define-key evil-normal-state-map "zo" 'kirigami-open-fold)
+  (define-key evil-normal-state-map "zO" 'kirigami-open-fold-rec)
+  (define-key evil-normal-state-map "zc" 'kirigami-close-fold)
+  (define-key evil-normal-state-map "za" 'kirigami-toggle-fold)
+  (define-key evil-normal-state-map "zr" 'kirigami-open-folds)
+  (define-key evil-normal-state-map "zm" 'kirigami-close-folds))
 ;; install monet
 (use-package monet
   :vc (:url "https://github.com/stevemolitor/monet" :rev :newest))

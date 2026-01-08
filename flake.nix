@@ -29,9 +29,13 @@
       url = "github:jacopone/antigravity-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    claude-code-nix = {
+      url = "github:sadjow/claude-code-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, antigravity-nix, ... }@inputs:
+  outputs = { self, nixpkgs, home-manager, antigravity-nix, claude-code-nix, ... }@inputs:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -40,7 +44,10 @@
       # Common overlay configuration
       # Applied to both NixOS and home-manager
       # ==================================================================
-      commonOverlays = [ antigravity-nix.overlays.default ];
+      commonOverlays = [
+        antigravity-nix.overlays.default
+        claude-code-nix.overlays.default
+      ];
 
       # ==================================================================
       # Shared module that provides registry configuration

@@ -18,13 +18,17 @@
     google-chrome       # Browser
     kdePackages.filelight # Disk usage analyzer
     libreoffice-qt      # Office suite
+    mailspring          # E-mail client
     mpv                 # Media player
+    nsxiv # Neo (or New or Not) Simple (or Small or Suckless) X Image Viewer
     obs-studio          # Streaming/recording
     pavucontrol         # Audio control
     pinentry-all        # GPG PIN entry
+    pinta
     remmina             # Remote desktop
     rofi                # Application launcher
     telegram-desktop    # Messaging
+    tutanota-desktop   # Secure mailing service client
     xfce.mousepad       # Simple text editor
 
     # X11 Utilities (user-level)

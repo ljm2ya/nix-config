@@ -1,5 +1,27 @@
 { config, lib, pkgs, ... }:
 
+let
+  # Google Cloud SDK
+  # Reference: https://nixos.wiki/wiki/Google_Cloud_SDK
+  #
+  # NOTE: withExtraComponents currently fails due to bundled Python tkinter dependencies
+  # Issue: auto-patchelf cannot satisfy libtcl8.6.so and libtk8.6.so
+  # Related: https://github.com/NixOS/nixpkgs/issues/223805
+  #          https://discourse.nixos.org/t/google-cloud-sdk-and-installing-extra-components/10319
+  #
+  # Workaround: Use base package and add components via:
+  #   1. `nix-shell -p google-cloud-sdk` for temporary component access
+  #   2. Use buildFHSUserEnv for FHS-compatible environment
+  #   3. Wait for upstream nixpkgs fix for bundled Python dependencies
+  #
+  # When the issue is fixed, you can use:
+  # gcloud = pkgs.google-cloud-sdk.withExtraComponents (with pkgs.google-cloud-sdk.components; [
+  #   gke-gcloud-auth-plugin
+  #   alpha
+  #   beta
+  # ]);
+  gcloud = pkgs.google-cloud-sdk;
+in
 {
   nixpkgs.config.allowUnfree = true;
 
@@ -58,6 +80,7 @@
       rlwrap
       rsync
       scrot
+      spotify-player
       ueberzugpp
       wget
       (yazi.override {
@@ -69,6 +92,9 @@
       vim-full
       xclip
       yadm
+
+      # Cloud tools
+      gcloud  # Google Cloud SDK with extra components
     ];
 
     # Dotfiles management with stow-like approach
@@ -98,6 +124,9 @@
       includes = [
         { path = "${config.home.homeDirectory}/nix-config/dotfiles/.gitconfig"; }
       ];
+      settings = {
+        push.autoSetupRemote = true;
+      };
     };
 
     # Zsh configuration - migrated from system, using dotfiles
